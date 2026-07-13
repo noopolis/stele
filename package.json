@@ -1,6 +1,6 @@
 {
   "name": "@noopolis/stele",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Noopolis causal-event envelope schema, parsing, and reconciliation (read/verify side).",
   "license": "MIT",
   "type": "module",
