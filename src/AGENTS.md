@@ -2,14 +2,30 @@
 
 ```text
 src/
-├── index.ts             # Barrel for package exports
-├── envelope.ts           # CausalEvent type + zod validator + parseCausalJsonl + canonical hashing
-├── reconcile.ts           # Pure reconciler + backward cause-chain tracer
-├── seq.ts                 # Per-(run_id, system:stream_id) contiguity checker
-├── envelope.test.ts
-├── reconcile.test.ts
-├── reconcile.perf.test.ts
-└── seq.test.ts
+├── index.ts                     # Barrel export for package public API
+├── envelope.ts                  # Compatibility facade re-exporting contract exports
+├── reconcile.ts                 # Pure reconciler + backward cause-chain tracing
+├── seq.ts                       # Per-(run_id, system:stream_id) contiguity checker
+├── AGENTS.md                    # This guide
+└── contracts/                   # Contract-level canonical envelope/finality/digest/bundle parsers
+    ├── AGENTS.md               # Contracts guide
+    ├── CLAUDE.md               # Compatibility guide symlink to AGENTS.md
+    ├── canonicalJson.ts         # Canonical JSON parser/stringifier/helpers
+    ├── canonicalJson.test.ts
+    ├── ids.ts                  # Recognized systems and causal-id helpers
+    ├── ids.test.ts
+    ├── envelope.ts             # noopolis.causal-event.v1 validation and JSONL parser
+    ├── envelope.test.ts
+    ├── streamFinal.ts           # noopolis.causal-stream-final.v1 validation
+    ├── streamFinal.test.ts
+    ├── digestDomain.ts          # noopolis.causal-digest-domain.v1 declaration/hash helpers
+    ├── digestDomain.test.ts
+    ├── bundle.ts                # Bundle preflight over mixed contract records
+    ├── bundle.test.ts
+    ├── index.ts                 # Contracts barrel export
+    ├── golden.test.ts           # Golden corpus coverage/invariant tests
+    └── goldens/
+        └── causal-contract.v1.json  # Sole approved corpus manifest
 ```
 
 Keep this package read/verify-only. Emit-side logic and fixture/conformance
