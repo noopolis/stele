@@ -90,7 +90,8 @@ const expectedAccepted = [
   "accept-digest-domain-exact-bytes",
   "accept-final-seq-zero",
   "accept-non-empty-final",
-  "accept-multi-stream"
+  "accept-multi-stream",
+  "accept-nested-numeric-key-order"
 ];
 
 const expectedRejected = [
@@ -123,7 +124,9 @@ const expectedRejected = [
   "reject-unsafe-integer",
   "reject-invalid-unicode",
   "reject-invalid-json-spelling",
-  "reject-non-finite-json-spelling"
+  "reject-non-finite-json-spelling",
+  "reject-lone-high-surrogate-runtime-key",
+  "reject-lone-low-surrogate-runtime-key"
 ];
 
   const normalizeNameInventory = (values: string[]) => new Set(values);

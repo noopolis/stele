@@ -62,6 +62,13 @@ describe("parseCanonicalJson", () => {
 describe("canonicalJsonStringify", () => {
   it("sorts UTF-16 object keys deterministically", () => {
     expect(canonicalJsonStringify({ b: 1, a: 1, "Ω": 1 })).toBe('{"a":1,"b":1,"Ω":1}');
+    expect(canonicalJsonStringify({ "10": 1, "2": 2, a: 3 })).toBe('{"10":1,"2":2,"a":3}');
+  });
+
+  it("orders nested mixed UTF-16 keys with direct primitive serialization", () => {
+    expect(canonicalJsonStringify({ z: 1, "2": 2, "10": 10, a: { "2": "two", "10": "ten", "a": "letter", "😀": "smile" } })).toBe(
+      '{"10":10,"2":2,"a":{"10":"ten","2":"two","a":"letter","😀":"smile"},"z":1}'
+    );
   });
 
   it("preserves array order", () => {
@@ -194,5 +201,17 @@ describe("canonical runtime validation", () => {
   it("accepts plain objects with plain nested arrays", () => {
     const value = { a: [{ b: 2 }, { c: 3 }] };
     expect(canonicalJsonStringify(value)).toBe('{"a":[{"b":2},{"c":3}]}');
+  });
+
+  it("rejects runtime lone high-surrogate string keys", () => {
+    expect(() => canonicalJsonStringify({ "\ud800": 1 })).toThrow(/lone high surrogate/i);
+  });
+
+  it("rejects runtime lone low-surrogate string keys", () => {
+    expect(() => canonicalJsonStringify({ "\udc00": 1 })).toThrow(/lone low surrogate/i);
+  });
+
+  it("accepts valid supplementary runtime string keys", () => {
+    expect(canonicalJsonStringify({ "\uD834\uDF06": "clef" })).toBe(JSON.stringify({ "\uD834\uDF06": "clef" }));
   });
 });

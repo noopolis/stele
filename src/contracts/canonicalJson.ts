@@ -85,6 +85,7 @@ const canonicalize = (value: unknown, seen: Set<object>, path: string): unknown 
   const descriptors = Object.getOwnPropertyDescriptors(value);
   const entries: [string, unknown][] = [];
   for (const key of Object.getOwnPropertyNames(value)) {
+    validateString(key, `${path} key ${key}`);
     const descriptor = descriptors[key];
     if (!descriptor || descriptor.get || descriptor.set || !descriptor.enumerable || !("value" in descriptor)) {
       throw new Error(`${path}: accessor/non-enumerable property`);
@@ -100,8 +101,43 @@ const canonicalize = (value: unknown, seen: Set<object>, path: string): unknown 
   return out;
 };
 
+const writeCanonicalValue = (value: unknown, out: string[]) => {
+  if (value === null || typeof value === "boolean" || typeof value === "number" || typeof value === "string") {
+    out.push(JSON.stringify(value));
+    return;
+  }
+  if (Array.isArray(value)) {
+    out.push("[");
+    for (let i = 0; i < value.length; i += 1) {
+      if (i > 0) out.push(",");
+      writeCanonicalValue(value[i], out);
+    }
+    out.push("]");
+    return;
+  }
+  if (typeof value === "object") {
+    const asRecord = value as Record<string, unknown>;
+    const keys = Object.keys(asRecord).sort(utf16Less);
+    out.push("{");
+    for (let i = 0; i < keys.length; i += 1) {
+      if (i > 0) out.push(",");
+      const key = keys[i]!;
+      out.push(JSON.stringify(key));
+      out.push(":");
+      writeCanonicalValue(asRecord[key], out);
+    }
+    out.push("}");
+    return;
+  }
+  throw new Error("unsupported canonical value");
+};
+
 export const canonicalJsonBytes = (value: unknown): Uint8Array => encoder.encode(canonicalJsonStringify(value));
-export const canonicalJsonStringify = (value: unknown): string => JSON.stringify(canonicalize(value, new Set(), "root"));
+export const canonicalJsonStringify = (value: unknown): string => {
+  const out: string[] = [];
+  writeCanonicalValue(canonicalize(value, new Set(), "root"), out);
+  return out.join("");
+};
 
 const hasBOM = (bytes: Uint8Array) =>
   bytes.length >= 3 && bytes[0] === utf8Bom[0] && bytes[1] === utf8Bom[1] && bytes[2] === utf8Bom[2];
