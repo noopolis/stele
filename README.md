@@ -28,10 +28,10 @@ npm install @noopolis/stele
   `parseCausalEvent` / `validateCausalEvent`, canonical JSON
   (`canonicalJsonStringify`), stable hashing (`hashCausalEvent`), JSONL parsing
   (`parseCausalJsonl`), the principal grammar, and `CAUSAL_EVENT_VERSION`.
-- **Reconcile** — `reconcileEvents` groups events into complete vs incomplete
-  causal chains and never invents a missing link; `traceCausesBackward` walks an
-  event's causes. Returns `ReconciledRecord[]`, `CausalEdge[]`, and a
-  `ReconciliationState`.
+- **Reconcile** — `reconcileEvents` returns a `ReconcileResult` with
+  `byEventId` records and `occurrencesByEventId`; each `ReconciledRecord` carries
+  `localState`, `reasonCodes`, `reasons`, and transitive `state`. It never invents
+  a missing link; use `traceCausesBackward` to walk an event's causes.
 - **Seq** — `checkSeqContiguity` and `streamKey` detect gaps in a per-stream
   sequence, surfacing `SeqGap`s instead of silently stitching over them.
 - **Sealed bundles** — `reconcileCausalBundle(input)` parses mixed raw JSONL
@@ -47,13 +47,15 @@ npm install @noopolis/stele
 ## Example
 
 ```ts
-import { parseCausalJsonl, reconcileEvents } from "@noopolis/stele";
+import { parseCausalJsonl, reconcileEvents, traceCausesBackward } from "@noopolis/stele";
 
 const { events, errors } = parseCausalJsonl(await readFile("ledger.jsonl", "utf8"));
-const { records, edges, incomplete } = reconcileEvents(events);
+const reconciliation = reconcileEvents(events);
+const record = reconciliation.byEventId.get("moltnet:m2");
+const edges = traceCausesBackward(reconciliation, "moltnet:m2");
 
-// records: complete causal chains, in causal (not wall-clock) order.
-// incomplete: chains with a missing cause — reported, never stitched.
+// record?.state includes transitive cause state; record?.reasonCodes explain it.
+// edges lists { from, to } cause links; missing causes are reported, never stitched.
 ```
 
 ## Design
