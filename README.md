@@ -1,5 +1,15 @@
 # @noopolis/stele
 
+## Reconciliation compatibility notes
+
+`streamKey(runId, system, streamId)` is an opaque JSON tuple encoding.  Do
+not parse it by delimiters; callers that persist or compare keys must treat
+the complete returned string as the identity.
+
+`checkSeqContiguity().gaps[*].missing` contains sorted inclusive
+`{ from, to }` ranges rather than one entry per missing sequence number. This
+keeps sparse streams (including `Number.MAX_SAFE_INTEGER`) bounded in memory.
+
 **The shared causal-event schema and reconciler for the Noopolis ecosystem.**
 
 Stele defines the canonical shape of a *causal event*, the rules for parsing and

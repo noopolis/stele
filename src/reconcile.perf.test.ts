@@ -43,7 +43,7 @@ const buildSyntheticStream = (streamCount: number, perStream: number): CausalEve
   return events;
 };
 
-describe("reconcileEvents — scale and single-pass linearity", () => {
+describe("reconcileEvents — O(V log V + E) total scale", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -89,8 +89,8 @@ describe("reconcileEvents — scale and single-pass linearity", () => {
     const result = reconcileEvents(allEvents);
     const elapsedMs = Date.now() - startedAt;
 
-    // Structural single-index proof: one indexed record per distinct
-    // event_id, never a cross-product of the input.
+    // Structural proof: one indexed record per id, with one canonical
+    // O(V log V) ordering pass and iterative O(V + E) graph traversal.
     const distinctEventIds = new Set(allEvents.map((event) => event.event_id));
     expect(result.byEventId.size).toBe(distinctEventIds.size);
     const totalOccurrences = [...result.occurrencesByEventId.values()].reduce(
@@ -132,5 +132,15 @@ describe("reconcileEvents — scale and single-pass linearity", () => {
     // Doubling the input exactly doubles the work — linear, not quadratic
     // (a quadratic reconciler would hash on the order of N^2 times).
     expect(largeHashCalls).toBe(smallHashCalls * 2);
+  });
+
+  it("handles a 10k-node cycle iteratively within the performance ceiling", () => {
+    const events = buildSyntheticStream(1, 10_000);
+    events[0]!.cause_event_ids = [events.at(-1)!.event_id];
+    const startedAt = Date.now();
+    const result = reconcileEvents(events);
+    expect(Date.now() - startedAt).toBeLessThan(5_000);
+    expect(result.byEventId.get(events[0]!.event_id)?.state).toBe("divergent");
+    expect(result.byEventId.get(events.at(-1)!.event_id)?.state).toBe("divergent");
   });
 });

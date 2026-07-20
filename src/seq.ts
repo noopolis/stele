@@ -1,5 +1,9 @@
 import type { CausalEvent } from "./envelope.js";
 
+/** Contract ordering: code-unit (UTF-16), never locale/ICU dependent. */
+export const compareUtf16 = (left: string, right: string): number =>
+  left < right ? -1 : left > right ? 1 : 0;
+
 /** Opaque, collision-safe identity for a causal stream. */
 export const streamKey = (runId: string, system: string, streamId: string): string =>
   JSON.stringify([runId, system, streamId]);
@@ -39,7 +43,7 @@ export const checkSeqContiguity = (events: CausalEvent[]): SeqContiguityResult =
   }
   const gaps: SeqGap[] = [];
   const maxSeqByStream = new Map<string, number>();
-  for (const [key, entry] of [...streams].sort(([left], [right]) => left.localeCompare(right))) {
+  for (const [key, entry] of [...streams].sort(([left], [right]) => compareUtf16(left, right))) {
     const seqs = [...new Set(entry.seqs)].sort((left, right) => left - right);
     const maxSeq = seqs.at(-1) ?? 0;
     maxSeqByStream.set(key, maxSeq);
