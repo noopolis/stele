@@ -34,6 +34,15 @@ npm install @noopolis/stele
   `ReconciliationState`.
 - **Seq** — `checkSeqContiguity` and `streamKey` detect gaps in a per-stream
   sequence, surfacing `SeqGap`s instead of silently stitching over them.
+- **Sealed bundles** — `reconcileCausalBundle(input)` parses mixed raw JSONL
+  text or bytes, uses only `noopolis.causal-stream-final.v1` records as final
+  authority, and returns `invalid`, `incomplete`, or `valid` with deterministic
+  parser, stream, and graph diagnostics. `declaredFinalSeq` remains a
+  compatibility-only `reconcileEvents` option and never seals a bundle.
+- **Digest comparison** — `compareCausalDigest(domain, subject, expectedHash)`
+  is a pure fail-closed SHA-256 comparison for a recognized domain. Exact UTF-8
+  and byte subjects are hashed exactly as supplied; digest declarations do not
+  assign product-specific subjects or producers.
 
 ## Example
 

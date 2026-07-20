@@ -3,6 +3,11 @@ import type { CheckedFinalHints, ReconcileResult, ReconciledRecord, Reconciliati
 import { checkSeqContiguity, compareUtf16, streamKey, streamSlotKey } from "./seq.js";
 
 type Occurrence = { canonical: string; event: CausalEvent; hash: string };
+/** Internal sealed-bundle finality input. Compatibility hints never set this. */
+export interface AuthoritativeFinality {
+  finals: Map<string, number>;
+  requireFinals: true;
+}
 const rank: Record<ReconciliationState, number> = { complete: 0, stale: 1, partial: 2, unknown: 3, divergent: 4 };
 const copy = (event: CausalEvent): CausalEvent => JSON.parse(canonicalJsonStringify(event)) as CausalEvent;
 const compareOccurrence = (left: Occurrence, right: Occurrence): number =>
@@ -13,24 +18,27 @@ const reasonText: Record<string, string> = {
   "self-cause": "event references itself as a cause", cycle: "event is a member of a causal cycle", "cross-run-cause": "cause is present only in another run",
   "missing-cause-unknown": "cause references a system with no events in this run", "missing-cause-partial": "cause event is not ingested in this run",
   "stream-behind-declared-final": "stream is behind its declared final seq", "cause-behind-declared-final": "cause stream is behind its declared final seq",
+  "missing-authoritative-stream-final": "observed stream has no authoritative final", "stream-authoritative-final-stale": "authoritative stream final exceeds observed sequence or the stream has a gap",
+  "cause-authoritative-final-stale": "missing cause may be beyond an authoritative stream final",
   "invalid-declared-final-hints": "declared final hints have an invalid compatibility shape",
   "ancestor-divergent": "an ancestor is divergent", "ancestor-unknown": "an ancestor is unknown", "ancestor-partial": "an ancestor is partial", "ancestor-stale": "an ancestor is stale"
 };
 const reasonRank: Record<string, number> = {
   "invalid-declared-final-hints": 0, "conflicting-event-id": 1, "conflicting-stream-slot": 2, "conflicting-cross-store-fact": 3, "cross-run-cause": 4, "cross-run-event-id": 5, "self-cause": 6, cycle: 7,
-  "missing-cause-unknown": 10, "missing-cause-partial": 20, "cause-behind-declared-final": 30, "stream-behind-declared-final": 31,
+  "missing-cause-unknown": 10, "missing-cause-partial": 20, "missing-authoritative-stream-final": 21, "cause-behind-declared-final": 30, "stream-behind-declared-final": 31,
+  "cause-authoritative-final-stale": 32, "stream-authoritative-final-stale": 33,
   "ancestor-divergent": 40, "ancestor-unknown": 41, "ancestor-partial": 42, "ancestor-stale": 43
 };
 const maxState = (left: ReconciliationState, right: ReconciliationState) => rank[left] >= rank[right] ? left : right;
 const localStateFor = (codes: Set<string>): ReconciliationState =>
   codes.has("invalid-declared-final-hints") || ["conflicting-event-id", "cross-run-event-id", "conflicting-stream-slot", "conflicting-cross-store-fact", "self-cause", "cycle", "cross-run-cause"].some((code) => codes.has(code)) ? "divergent" :
-    codes.has("missing-cause-unknown") ? "unknown" : codes.has("missing-cause-partial") ? "partial" : codes.size ? "stale" : "complete";
+    codes.has("missing-cause-unknown") ? "unknown" : codes.has("missing-cause-partial") || codes.has("missing-authoritative-stream-final") ? "partial" : codes.size ? "stale" : "complete";
 
 /**
  * Graph reconciliation uses one canonical O(V log V) occurrence/output pass;
  * SCC discovery and propagation are iterative O(V + E), with no traversal sort.
  */
-export const reconcileGraph = (events: CausalEvent[], hints: CheckedFinalHints): ReconcileResult => {
+export const reconcileGraph = (events: CausalEvent[], hints: CheckedFinalHints, authoritative?: AuthoritativeFinality): ReconcileResult => {
   const occurrences = events.map((raw) => ({ canonical: canonicalJsonStringify(raw), event: copy(raw), hash: hashCausalEvent(raw) })); // exactly once per occurrence
   occurrences.sort(compareOccurrence);
   const byId = new Map<string, Occurrence[]>(); const slots = new Map<string, Set<string>>(); const systemsByRun = new Map<string, Set<CausalEventSystem>>();
@@ -51,19 +59,21 @@ export const reconcileGraph = (events: CausalEvent[], hints: CheckedFinalHints):
   const contiguity = checkSeqContiguity(occurrences.map(({ event }) => event));
   const gapped = new Set(contiguity.gaps.map((gap) => streamKey(gap.runId, gap.system, gap.streamId)));
   const staleSystemsByRun = new Map<string, Set<string>>();
-  for (const [key, finalSeq] of hints.finals) {
+  const finals = authoritative?.finals ?? hints.finals;
+  for (const [key, finalSeq] of finals) {
     const tuple = JSON.parse(key) as [string, string, string]; const max = contiguity.maxSeqByStream.get(key) ?? 0;
     if (finalSeq > max || (finalSeq === max && gapped.has(key))) (staleSystemsByRun.get(tuple[0]) ?? staleSystemsByRun.set(tuple[0], new Set()).get(tuple[0])!).add(tuple[1]);
   }
   for (const [id, { event }] of reps) {
-    const key = streamKey(event.run_id, event.emitter.system, event.emitter.stream_id); const finalSeq = hints.finals.get(key); const max = contiguity.maxSeqByStream.get(key) ?? 0;
-    if (finalSeq !== undefined && (finalSeq > max || (finalSeq === max && gapped.has(key)))) localCodes.get(id)!.add("stream-behind-declared-final");
+    const key = streamKey(event.run_id, event.emitter.system, event.emitter.stream_id); const finalSeq = finals.get(key); const max = contiguity.maxSeqByStream.get(key) ?? 0;
+    if (authoritative?.requireFinals && finalSeq === undefined) localCodes.get(id)!.add("missing-authoritative-stream-final");
+    else if (finalSeq !== undefined && (finalSeq > max || (finalSeq === max && gapped.has(key)))) localCodes.get(id)!.add(authoritative ? "stream-authoritative-final-stale" : "stream-behind-declared-final");
   }
   const moltnet = new Map<string, Set<string>>();
   for (const { event } of reps.values()) if (event.emitter.system === "moltnet" && event.type === "message.accepted") { const { message_id, content_sha256 } = event.payload; if (typeof message_id === "string" && typeof content_sha256 === "string") (moltnet.get(JSON.stringify([event.run_id, message_id])) ?? moltnet.set(JSON.stringify([event.run_id, message_id]), new Set()).get(JSON.stringify([event.run_id, message_id]))!).add(content_sha256); }
   for (const [id, { event }] of reps) if (event.emitter.system === "daimon" && event.type === "turn.input.submitted") { const { input_message_ids, input_content_sha256 } = event.payload; if (Array.isArray(input_message_ids) && typeof input_content_sha256 === "string" && input_message_ids.some((messageId) => typeof messageId === "string" && [...(moltnet.get(JSON.stringify([event.run_id, messageId])) ?? [])].some((value) => value !== input_content_sha256))) localCodes.get(id)!.add("conflicting-cross-store-fact"); }
   const causes = new Map<string, string[]>(); const reverse = new Map<string, string[]>(); for (const id of reps.keys()) reverse.set(id, []);
-  for (const [id, { event }] of reps) { const resolved: string[] = []; for (const cause of event.cause_event_ids) { const target = reps.get(cause); if (!target) { const system = cause.split(":", 1)[0] ?? ""; if (staleSystemsByRun.get(event.run_id)?.has(system)) localCodes.get(id)!.add("cause-behind-declared-final"); else if (systemsByRun.get(event.run_id)?.has(system as CausalEventSystem)) localCodes.get(id)!.add("missing-cause-partial"); else localCodes.get(id)!.add("missing-cause-unknown"); } else if (cause === id) localCodes.get(id)!.add("self-cause"); else if (byId.get(cause)!.some(({ event: occurrence }) => occurrence.run_id !== event.run_id) || target.event.run_id !== event.run_id) localCodes.get(id)!.add("cross-run-cause"); else { resolved.push(cause); reverse.get(cause)!.push(id); } } causes.set(id, resolved); }
+  for (const [id, { event }] of reps) { const resolved: string[] = []; for (const cause of event.cause_event_ids) { const target = reps.get(cause); if (!target) { const system = cause.split(":", 1)[0] ?? ""; if (staleSystemsByRun.get(event.run_id)?.has(system)) localCodes.get(id)!.add(authoritative ? "cause-authoritative-final-stale" : "cause-behind-declared-final"); else if (systemsByRun.get(event.run_id)?.has(system as CausalEventSystem)) localCodes.get(id)!.add("missing-cause-partial"); else localCodes.get(id)!.add("missing-cause-unknown"); } else if (cause === id) localCodes.get(id)!.add("self-cause"); else if (byId.get(cause)!.some(({ event: occurrence }) => occurrence.run_id !== event.run_id) || target.event.run_id !== event.run_id) localCodes.get(id)!.add("cross-run-cause"); else { resolved.push(cause); reverse.get(cause)!.push(id); } } causes.set(id, resolved); }
   const order: string[] = []; const seen = new Set<string>();
   for (const start of reps.keys()) if (!seen.has(start)) { const stack: Array<[string, number]> = [[start, 0]]; seen.add(start); while (stack.length) { const top = stack.at(-1)!; const next = causes.get(top[0])![top[1]]; if (next !== undefined) { top[1] += 1; if (!seen.has(next)) { seen.add(next); stack.push([next, 0]); } } else { order.push(top[0]); stack.pop(); } } }
   const assigned = new Set<string>();

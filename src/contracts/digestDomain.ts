@@ -203,3 +203,26 @@ export const subjectHashBytesFromDigestDomain = (domain: CausalDigestDomain, sub
 export const subjectHashFromDigestDomain = (domain: CausalDigestDomain, subject: unknown): string => {
   return hashSha256(subjectBytesForDigestDomain(domain, subject));
 };
+
+export type CausalDigestComparison =
+  | { digest: string; matches: true }
+  | { matches: false; reason: "digest-mismatch" | "invalid-domain" | "invalid-expected-hash" | "invalid-subject" };
+
+/** Pure, fail-closed comparison in one recognized digest domain. */
+export const compareCausalDigest = (domain: unknown, subject: unknown, expectedSha256: unknown): CausalDigestComparison => {
+  if (typeof expectedSha256 !== "string" || !/^[0-9a-f]{64}$/.test(expectedSha256)) {
+    return { matches: false, reason: "invalid-expected-hash" };
+  }
+  let parsed: CausalDigestDomain;
+  try {
+    parsed = parseCausalDigestDomain(domain);
+  } catch {
+    return { matches: false, reason: "invalid-domain" };
+  }
+  try {
+    const digest = subjectHashFromDigestDomain(parsed, subject);
+    return digest === expectedSha256 ? { digest, matches: true } : { matches: false, reason: "digest-mismatch" };
+  } catch {
+    return { matches: false, reason: "invalid-subject" };
+  }
+};
