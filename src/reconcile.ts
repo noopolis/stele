@@ -52,13 +52,16 @@ export const checkDeclaredFinalHints = (options: unknown): CheckedFinalHints => 
     if (optionKeys.some((key) => key !== "declaredFinalSeq")) return { finals: new Map(), invalid: true };
     const optionDescriptor = Object.getOwnPropertyDescriptor(options, "declaredFinalSeq");
     if (!optionDescriptor) return empty();
-    if (!("value" in optionDescriptor) || types.isProxy(optionDescriptor.value)) return { finals: new Map(), invalid: true };
+    if (!("value" in optionDescriptor) || !optionDescriptor.enumerable || types.isProxy(optionDescriptor.value)) return { finals: new Map(), invalid: true };
     const hints = optionDescriptor.value;
-    if (hints === null || typeof hints !== "object" || Object.getPrototypeOf(hints) !== Object.prototype || Reflect.ownKeys(hints).some((key) => typeof key !== "string")) return { finals: new Map(), invalid: true };
+    if (hints === null || typeof hints !== "object" || Object.getPrototypeOf(hints) !== Object.prototype) return { finals: new Map(), invalid: true };
+    const hintKeys = Reflect.ownKeys(hints);
+    if (hintKeys.some((key) => typeof key !== "string")) return { finals: new Map(), invalid: true };
     const finals = new Map<string, number>();
-    for (const key of Object.keys(hints)) {
+    for (const key of hintKeys) {
+      if (typeof key !== "string") return { finals: new Map(), invalid: true };
       const descriptor = Object.getOwnPropertyDescriptor(hints, key);
-      if (!descriptor || !("value" in descriptor) || !Number.isSafeInteger(descriptor.value) || descriptor.value < 0) return { finals: new Map(), invalid: true };
+      if (!descriptor || !("value" in descriptor) || !descriptor.enumerable || !Number.isSafeInteger(descriptor.value) || descriptor.value < 0) return { finals: new Map(), invalid: true };
       const tuple = JSON.parse(key);
       if (!Array.isArray(tuple) || tuple.length !== 3 || tuple.some((item) => typeof item !== "string") || tuple.some((item) => item.length === 0) || !systems.has(tuple[1]) || JSON.stringify(tuple) !== key) return { finals: new Map(), invalid: true };
       finals.set(key, descriptor.value);

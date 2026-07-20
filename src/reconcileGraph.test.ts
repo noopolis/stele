@@ -110,7 +110,11 @@ describe("reconcileEvents graph hardening", () => {
     const invalidKey = { declaredFinalSeq: { legacy: 1 } };
     const invalidValue = { declaredFinalSeq: { [streamKey("run-1", "moltnet", "s")]: -1 } };
     const extraOption = { declaredFinalSeq: {}, extra: true };
-    for (const options of [getterOptions, proxyOptions, finalGetter, finalProxy, invalidKey, invalidValue, extraOption]) {
+    const hiddenOptions = Object.defineProperty({}, "declaredFinalSeq", { value: {}, enumerable: false });
+    const hiddenHints = Object.defineProperty({}, streamKey("run-1", "moltnet", "s"), { value: 1, enumerable: false });
+    const hiddenHintsWithGetter = Object.defineProperty({}, "hidden", { enumerable: false, get: () => { finalGetterRead = true; throw new Error("nope"); } });
+    const hiddenGetterOptions = Object.defineProperty({}, "declaredFinalSeq", { enumerable: false, get: () => { getterRead = true; throw new Error("nope"); } });
+    for (const options of [getterOptions, proxyOptions, finalGetter, finalProxy, invalidKey, invalidValue, extraOption, hiddenOptions, { declaredFinalSeq: hiddenHints }, hiddenGetterOptions, { declaredFinalSeq: hiddenHintsWithGetter }]) {
       const result = reconcileEvents([event("moltnet:only")], options as never);
       expect(result.byEventId.get("moltnet:only")?.reasonCodes).toEqual(["invalid-declared-final-hints"]);
     }
