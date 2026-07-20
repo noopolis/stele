@@ -73,23 +73,66 @@ describe("reconcileCausalBundle", () => {
     expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: "duplicate-digest-domain" }));
     const all = reconcileCausalBundle(lines(final("empty", 0), ...SUPPORTED_CAUSAL_DIGEST_DECLARATIONS));
     expect(all.verdict).toBe("valid");
-    expect(all.digestDomains.map(({ label }) => label)).toEqual(SUPPORTED_CAUSAL_DIGEST_DECLARATIONS.map(({ label }) => label));
+    expect(all.digestDomains.map(({ label }) => label)).toEqual(["causal-event/canonical-json", "content/exact-bytes", "content/exact-utf8"]);
   });
 
-  it("is deterministic and does not retain result mutation", () => {
-    const records = [event("moltnet:a", 1, [], "a"), event("moltnet:b", 1, [], "b"), final("a"), final("b")];
+  it("canonically orders every valid result array and does not retain result mutation", () => {
+    const records = [
+      event("moltnet:a", 1, [], "z"), final("z"), domain("content/exact-utf8"),
+      event("moltnet:b", 1, [], "a"), final("a"), domain("content/exact-bytes")
+    ];
     const left = reconcileCausalBundle(lines(...records));
     const right = reconcileCausalBundle(lines(...records.slice().reverse()));
     expect(left.streams).toEqual(right.streams);
+    expect(left.streamFinals).toEqual(right.streamFinals);
+    expect(left.digestDomains).toEqual(right.digestDomains);
+    expect(left.streamFinals.map(({ emitter }) => emitter.stream_id)).toEqual(["a", "z"]);
+    expect(left.digestDomains.map(({ label }) => label)).toEqual(["content/exact-bytes", "content/exact-utf8"]);
     left.streams[0]!.missing.push({ from: 99, to: 99 });
     left.streamFinals[0]!.emitter.stream_id = "changed";
-    expect(reconcileCausalBundle(lines(...records)).streams).toEqual(right.streams);
+    left.digestDomains[0]!.label = "content/exact-utf8";
+    expect(reconcileCausalBundle(lines(...records))).toMatchObject({ digestDomains: right.digestDomains, streamFinals: right.streamFinals, streams: right.streams });
     const source = new TextEncoder().encode(lines(...records));
     const fromBytes = reconcileCausalBundle(source);
     source.fill(0);
     expect(fromBytes.verdict).toBe("valid");
     expect(fromBytes.graph.byEventId.get("moltnet:a")?.event.payload).toEqual({ id: "moltnet:a" });
     expect(reconcileCausalBundle("").verdict).toBe("valid");
+  });
+
+  it("keeps missing causes partial when authoritative finality knows only their system", () => {
+    const child = { ...event("daimon:child", 1, ["moltnet:absent"], "child"), emitter: { seq: 1, stream_id: "child", system: "daimon" as const } };
+    const unrelatedStale = reconcileCausalBundle(lines(
+      event("moltnet:present", 1, [], "unrelated"),
+      child,
+      final("unrelated", 2),
+      { ...final("empty", 1), emitter: { stream_id: "empty", system: "mneme" } },
+      { ...final("absent", 0), emitter: { stream_id: "absent", system: "simfile" } },
+      { ...final("child", 1), emitter: { stream_id: "child", system: "daimon" } }
+    ));
+    expect(unrelatedStale.graph.byEventId.get("daimon:child")).toMatchObject({ localState: "partial", reasonCodes: ["missing-cause-partial"], state: "partial" });
+    expect(unrelatedStale.graph.byEventId.get("moltnet:present")?.localState).toBe("stale");
+    const descendant = { ...event("daimon:descendant", 1, ["moltnet:present"], "descendant"), emitter: { seq: 1, stream_id: "descendant", system: "daimon" as const } };
+    const propagated = reconcileCausalBundle(lines(event("moltnet:present", 1, [], "own"), descendant, final("own", 2), { ...final("descendant"), emitter: { stream_id: "descendant", system: "daimon" } }));
+    expect(propagated.graph.byEventId.get("moltnet:present")?.localState).toBe("stale");
+    expect(propagated.graph.byEventId.get("daimon:descendant")?.reasonCodes).toEqual(["ancestor-stale"]);
+  });
+
+  it("classifies empty and positive authoritative systems as partial, and absent systems as unknown", () => {
+    const emptyChild = { ...event("daimon:empty-child", 1, ["mneme:missing"], "empty-child"), emitter: { seq: 1, stream_id: "empty-child", system: "daimon" as const } };
+    const positiveChild = { ...event("daimon:positive-child", 1, ["simfile:missing"], "positive-child"), emitter: { seq: 1, stream_id: "positive-child", system: "daimon" as const } };
+    const unknownChild = { ...event("daimon:unknown-child", 1, ["moltnet:missing"], "unknown-child"), emitter: { seq: 1, stream_id: "unknown-child", system: "daimon" as const } };
+    const result = reconcileCausalBundle(lines(
+      emptyChild, positiveChild, unknownChild,
+      { ...final("empty", 0), emitter: { stream_id: "empty", system: "mneme" } },
+      { ...final("positive", 1), emitter: { stream_id: "positive", system: "simfile" } },
+      { ...final("empty-child"), emitter: { stream_id: "empty-child", system: "daimon" } },
+      { ...final("positive-child"), emitter: { stream_id: "positive-child", system: "daimon" } },
+      { ...final("unknown-child"), emitter: { stream_id: "unknown-child", system: "daimon" } }
+    ));
+    expect(result.graph.byEventId.get("daimon:empty-child")).toMatchObject({ localState: "partial", reasonCodes: ["missing-cause-partial"] });
+    expect(result.graph.byEventId.get("daimon:positive-child")).toMatchObject({ localState: "partial", reasonCodes: ["missing-cause-partial"] });
+    expect(result.graph.byEventId.get("daimon:unknown-child")).toMatchObject({ localState: "unknown", reasonCodes: ["missing-cause-unknown"] });
   });
 });
 

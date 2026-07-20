@@ -1,6 +1,7 @@
 import {
   parseCausalBundle,
   parseCausalBundleBytes,
+  getCanonicalDigestDeclarationBytes,
   type BundleParseError,
   type CausalDigestDomain,
   type CausalStreamFinal
@@ -39,6 +40,21 @@ export interface CausalBundleReconciliation {
 
 const compareStream = (left: CausalBundleStreamDiagnostic, right: CausalBundleStreamDiagnostic): number =>
   compareUtf16(left.runId, right.runId) || compareUtf16(left.system, right.system) || compareUtf16(left.streamId, right.streamId);
+
+const compareFinal = (left: CausalStreamFinal, right: CausalStreamFinal): number =>
+  compareUtf16(left.run_id, right.run_id) || compareUtf16(left.emitter.system, right.emitter.system) ||
+  compareUtf16(left.emitter.stream_id, right.emitter.stream_id) || (left.final_seq < right.final_seq ? -1 : left.final_seq > right.final_seq ? 1 : 0);
+
+const compareBytes = (left: Uint8Array, right: Uint8Array): number => {
+  const length = Math.min(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    if (left[index] !== right[index]) return left[index]! < right[index]! ? -1 : 1;
+  }
+  return left.length < right.length ? -1 : left.length > right.length ? 1 : 0;
+};
+
+const compareDomain = (left: CausalDigestDomain, right: CausalDigestDomain): number =>
+  compareBytes(getCanonicalDigestDeclarationBytes(left), getCanonicalDigestDeclarationBytes(right));
 
 const copyRanges = (ranges: SeqRange[]): SeqRange[] => ranges.map(({ from, to }) => ({ from, to }));
 const copyFinal = (value: CausalStreamFinal): CausalStreamFinal => ({
@@ -90,7 +106,7 @@ export const reconcileCausalBundle = (input: string | Uint8Array): CausalBundleR
   const verdict: CausalBundleVerdict = diagnostics.length || hasDivergence ? "invalid" :
     hasIncompleteGraph || hasIncompleteStream ? "incomplete" : "valid";
   return {
-    diagnostics, digestDomains: parsed.digestDomains.map(copyDomain), graph,
-    streamFinals: parsed.streamFinals.map(copyFinal), streams, verdict
+    diagnostics, digestDomains: parsed.digestDomains.map(copyDomain).sort(compareDomain), graph,
+    streamFinals: parsed.streamFinals.map(copyFinal).sort(compareFinal), streams, verdict
   };
 };
