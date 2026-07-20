@@ -5,6 +5,7 @@ src/
 ├── index.ts                     # Barrel export for package public API
 ├── envelope.ts                  # Compatibility facade re-exporting contract exports
 ├── reconcile.ts                 # Pure reconciler + backward cause-chain tracing
+├── reconcileGraph.ts            # Iterative graph indexing, SCCs, and state propagation
 ├── seq.ts                       # Per-(run_id, system:stream_id) contiguity checker
 ├── AGENTS.md                    # This guide
 └── contracts/                   # Contract-level canonical envelope/finality/digest/bundle parsers
