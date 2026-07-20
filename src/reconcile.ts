@@ -57,15 +57,17 @@ export const checkDeclaredFinalHints = (options: unknown): CheckedFinalHints => 
     if (hints === null || typeof hints !== "object" || Object.getPrototypeOf(hints) !== Object.prototype) return { finals: new Map(), invalid: true };
     const hintKeys = Reflect.ownKeys(hints);
     if (hintKeys.some((key) => typeof key !== "string")) return { finals: new Map(), invalid: true };
-    const finals = new Map<string, number>();
+    const checkedEntries: Array<[string, number]> = [];
     for (const key of hintKeys) {
       if (typeof key !== "string") return { finals: new Map(), invalid: true };
       const descriptor = Object.getOwnPropertyDescriptor(hints, key);
       if (!descriptor || !("value" in descriptor) || !descriptor.enumerable || !Number.isSafeInteger(descriptor.value) || descriptor.value < 0) return { finals: new Map(), invalid: true };
       const tuple = JSON.parse(key);
       if (!Array.isArray(tuple) || tuple.length !== 3 || tuple.some((item) => typeof item !== "string") || tuple.some((item) => item.length === 0) || !systems.has(tuple[1]) || JSON.stringify(tuple) !== key) return { finals: new Map(), invalid: true };
-      finals.set(key, descriptor.value);
+      checkedEntries.push([key, descriptor.value]);
     }
+    const finals = new Map<string, number>();
+    for (const [key, value] of checkedEntries) finals.set(key, value);
     return { finals, invalid: false };
   } catch {
     return { finals: new Map(), invalid: true };
