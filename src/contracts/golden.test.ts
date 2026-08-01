@@ -91,7 +91,8 @@ const expectedAccepted = [
   "accept-final-seq-zero",
   "accept-non-empty-final",
   "accept-multi-stream",
-  "accept-nested-numeric-key-order"
+  "accept-nested-numeric-key-order",
+  "accept-foreign-cause-namespace"
 ];
 
 const expectedRejected = [
@@ -106,7 +107,7 @@ const expectedRejected = [
   "reject-malformed-event-id",
   "reject-unrecognized-event-id-system",
   "reject-mismatched-event-id-prefix",
-  "reject-unrecognized-cause-id",
+  "reject-bare-cause-id",
   "reject-repeated-causes",
   "reject-duplicate-event-id",
   "reject-duplicate-stream-slot",

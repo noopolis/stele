@@ -14,9 +14,9 @@ src/
     ├── CLAUDE.md               # Compatibility guide symlink to AGENTS.md
     ├── canonicalJson.ts         # Canonical JSON parser/stringifier/helpers
     ├── canonicalJson.test.ts
-    ├── ids.ts                  # Recognized systems and causal-id helpers
+    ├── ids.ts                  # Closed event-id and open cause-namespace helpers
     ├── ids.test.ts
-    ├── envelope.ts             # noopolis.causal-event.v1 validation and JSONL parser
+    ├── envelope.ts             # Admission validation; cause namespace shape is deferred
     ├── envelope.test.ts
     ├── streamFinal.ts           # noopolis.causal-stream-final.v1 validation
     ├── streamFinal.test.ts
@@ -27,7 +27,7 @@ src/
     ├── index.ts                 # Contracts barrel export
     ├── golden.test.ts           # Golden corpus coverage/invariant tests
     └── goldens/
-        └── causal-contract.v1.json  # Sole approved corpus manifest
+        └── causal-contract.v1.json  # Sole approved corpus; foreign cause namespaces are accepted
 ```
 
 Keep this package read/verify-only. Emit-side logic and fixture/conformance
