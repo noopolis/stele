@@ -1,5 +1,6 @@
 import { parseCausalEvent, type CausalEvent } from "./envelope.js";
 import { parseCausalDigestDomain, type CausalDigestDomain } from "./digestDomain.js";
+import { parseCausalCauseId } from "./ids.js";
 import { CAUSAL_STREAM_FINAL_VERSION, parseCausalStreamFinal, type CausalStreamFinal } from "./streamFinal.js";
 import { parseCanonicalJson } from "./canonicalJson.js";
 
@@ -149,6 +150,21 @@ export const parseCausalBundle = (jsonl: string): BundleParseResult => {
         if ("line" in parsed) {
           addError(result.errors, parsed);
           return;
+        }
+
+        // INGEST vs SEALING: be liberal in what you accept from others,
+        // strict in what you seal yourself.
+        for (const causeId of parsed.cause_event_ids) {
+          try {
+            parseCausalCauseId(causeId);
+          } catch (error) {
+            addError(result.errors, {
+              line: lineNumber,
+              message: `invalid cause id ${causeId} for event ${parsed.event_id}: ${
+                error instanceof Error ? error.message : String(error)
+              }`
+            });
+          }
         }
 
         if (eventById.has(parsed.event_id)) {

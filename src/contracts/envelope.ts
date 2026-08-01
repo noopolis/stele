@@ -4,7 +4,6 @@ import { z } from "zod";
 
 import {
   assertUniqueCauseEventIds,
-  parseCausalCauseId,
   parseCausalEventId,
   type CausalEventSystem
 } from "./ids.js";
@@ -88,13 +87,13 @@ const causalEventEmitterSchema = z.object({
 
 export const causalEventSchema = z
   .object({
+    // Admission checks only non-empty strings and uniqueness. Namespace
+    // shape is B169 D4 RECONCILIATION content and is deliberately not
+    // checked on this parse-fatal path.
     cause_event_ids: z
       .array(z.string().min(1))
       .superRefine((causes, context) => {
         try {
-          for (const cause of causes) {
-            parseCausalCauseId(cause);
-          }
           assertUniqueCauseEventIds(causes);
         } catch (error) {
           context.addIssue({

@@ -24,7 +24,24 @@ describe("causal event and cause ids", () => {
 
   it("rejects unknown systems", () => {
     expect(() => parseCausalEventId("unknown:local")).toThrow(/unrecognized causal system/);
-    expect(() => parseCausalCauseId("foo")).toThrow(/must be <system>:<local>/);
+  });
+
+  describe("cause ids", () => {
+    it("accepts foreign namespaces and splits only at the first colon", () => {
+      expect(parseCausalCauseId("driver:turn:7")).toEqual({ namespace: "driver", local: "turn:7" });
+    });
+
+    it("accepts a recognized namespace", () => {
+      expect(parseCausalCauseId("moltnet:message-1")).toEqual({ namespace: "moltnet", local: "message-1" });
+    });
+
+    it("rejects malformed values", () => {
+      expect(() => parseCausalCauseId("foo")).toThrow(/must be <namespace>:<local>/);
+      expect(() => parseCausalCauseId(":local")).toThrow(/must be <namespace>:<local>/);
+      expect(() => parseCausalCauseId("ns:")).toThrow(/local suffix/);
+      expect(() => parseCausalCauseId(42)).toThrow(/non-empty string/);
+      expect(() => parseCausalCauseId("")).toThrow(/non-empty string/);
+    });
   });
 
   it("rejects empty local suffix", () => {

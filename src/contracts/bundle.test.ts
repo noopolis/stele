@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { CAUSAL_EVENT_VERSION } from "./envelope.js";
+import { CAUSAL_EVENT_VERSION, parseCausalJsonl } from "./envelope.js";
 import { CAUSAL_STREAM_FINAL_VERSION } from "./streamFinal.js";
 import { parseCausalBundle, parseCausalBundleBytes } from "./bundle.js";
 
@@ -190,6 +190,38 @@ describe("parseCausalBundle", () => {
     const { events, errors } = parseCausalBundle(jsonl);
     expect(events).toHaveLength(1);
     expect(errors).toEqual([]);
+  });
+
+  it("admits a bare cause id at ingest but rejects it at seal", () => {
+    const jsonl = `${JSON.stringify({ ...eventA, cause_event_ids: ["fixture-turn-1"] })}\n`;
+
+    // Be liberal in what you accept from others: INGEST preserves evidence
+    // so stitching can repair the producer-local cause.
+    const ingest = parseCausalJsonl(jsonl);
+    expect(ingest.errors).toEqual([]);
+    expect(ingest.events).toHaveLength(1);
+    expect(ingest.events[0]?.cause_event_ids).toEqual(["fixture-turn-1"]);
+
+    // Be strict in what you seal yourself: SEALING rejects the producer defect.
+    const sealed = parseCausalBundle(jsonl);
+    expect(sealed.errors.length).toBeGreaterThan(0);
+    expect(sealed.errors.some((error) => error.message.includes("fixture-turn-1"))).toBe(true);
+  });
+
+  it("accepts a foreign cause namespace at ingest and seal", () => {
+    const jsonl = `${JSON.stringify({ ...eventA, cause_event_ids: ["driver:turn:7"] })}\n`;
+
+    // Be liberal in what you accept from others and strict in what you seal
+    // yourself; foreign namespaces conform on both sides of that rule.
+    const ingest = parseCausalJsonl(jsonl);
+    expect(ingest.errors).toEqual([]);
+    expect(ingest.events).toHaveLength(1);
+    expect(ingest.events[0]?.cause_event_ids).toEqual(["driver:turn:7"]);
+
+    const sealed = parseCausalBundle(jsonl);
+    expect(sealed.errors).toEqual([]);
+    expect(sealed.events).toHaveLength(1);
+    expect(sealed.events[0]?.cause_event_ids).toEqual(["driver:turn:7"]);
   });
 
   it("rejects direct causes that resolve to another run", () => {

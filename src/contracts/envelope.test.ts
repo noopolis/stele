@@ -65,12 +65,22 @@ describe("causalEventSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects malformed cause ids", () => {
+  it("admits a bare cause id (reconciliation content, not an admission field)", () => {
     const result = validateCausalEvent({
       ...goldenRecord,
       cause_event_ids: ["missing-colon"]
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.cause_event_ids).toEqual(["missing-colon"]);
+  });
+
+  it("admits a foreign cause namespace unchanged", () => {
+    const result = validateCausalEvent({
+      ...goldenRecord,
+      cause_event_ids: ["driver:turn:7"]
+    });
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.cause_event_ids).toEqual(["driver:turn:7"]);
   });
 
   it("rejects duplicate cause ids while preserving order", () => {
@@ -224,6 +234,15 @@ describe("parseCausalJsonl", () => {
     );
     expect(errors).toEqual([]);
     expect(events).toHaveLength(1);
+  });
+
+  it("admits a bare cause id through the JSONL ingest gate", () => {
+    const { errors, events } = parseCausalJsonl(
+      `${JSON.stringify({ ...goldenRecord, cause_event_ids: ["fixture-turn-1"] })}\n`
+    );
+    expect(errors).toEqual([]);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.cause_event_ids).toEqual(["fixture-turn-1"]);
   });
 
   it("rejects impossible recorded_at dates in JSONL parsing", () => {
