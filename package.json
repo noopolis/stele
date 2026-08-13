@@ -1,6 +1,6 @@
 {
   "name": "@noopolis/stele",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Noopolis causal-event envelope schema, parsing, and reconciliation (read/verify side).",
   "license": "MIT",
   "type": "module",
@@ -10,10 +10,12 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./contracts/goldens/causal-contract.v1.json": "./src/contracts/goldens/causal-contract.v1.json"
   },
   "files": [
     "dist",
+    "src/contracts/goldens/causal-contract.v1.json",
     "README.md"
   ],
   "repository": {
