@@ -193,6 +193,21 @@ describe("reconcileEvents — full interaction chain", () => {
 });
 
 describe("traceCausesBackward — guard branches", () => {
+  it("terminates self and two-node cycles while retaining the encountered edges", () => {
+    const self = { ...m1, cause_event_ids: ["moltnet:m1"] };
+    expect(traceCausesBackward(new Map([[self.event_id, self]]), self.event_id)).toEqual([{ from: "moltnet:m1", to: "moltnet:m1" }]);
+    const a = { ...m1, event_id: "moltnet:a", cause_event_ids: ["moltnet:b"] };
+    const b = { ...m1, event_id: "moltnet:b", cause_event_ids: ["moltnet:a"] };
+    expect(traceCausesBackward(new Map([[a.event_id, a], [b.event_id, b]]), a.event_id)).toEqual([{ from: "moltnet:a", to: "moltnet:b" }, { from: "moltnet:b", to: "moltnet:a" }]);
+  });
+
+  it("records dangling causes and handles a deep iterative chain", () => {
+    const dangling = { ...m1, cause_event_ids: ["moltnet:absent"] };
+    expect(traceCausesBackward(new Map([[dangling.event_id, dangling]]), dangling.event_id)).toEqual([{ from: "moltnet:m1", to: "moltnet:absent" }]);
+    const chain = new Map<string, CausalEvent>();
+    for (let index = 0; index < 10_000; index += 1) chain.set(`moltnet:${index}`, { ...m1, event_id: `moltnet:${index}`, cause_event_ids: index ? [`moltnet:${index - 1}`] : [] });
+    expect(traceCausesBackward(chain, "moltnet:9999")).toHaveLength(9_999);
+  });
   it("returns no edges when the start event_id cannot be resolved", () => {
     const result = reconcileEvents(fullChain);
     expect(traceCausesBackward(result, "moltnet:does-not-exist")).toEqual([]);

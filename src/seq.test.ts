@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { CAUSAL_EVENT_VERSION } from "./envelope.js";
 import type { CausalEvent } from "./envelope.js";
-import { checkSeqContiguity, streamKey } from "./seq.js";
+import { checkSeqContiguity, streamKey, streamSlotKey } from "./seq.js";
 
 const makeEvent = (overrides: Partial<CausalEvent> & { emitter: CausalEvent["emitter"] }): CausalEvent => ({
   cause_event_ids: [],
@@ -17,8 +17,10 @@ const makeEvent = (overrides: Partial<CausalEvent> & { emitter: CausalEvent["emi
 });
 
 describe("streamKey", () => {
-  it("combines run_id, system, and stream_id", () => {
-    expect(streamKey("run-1", "moltnet", "network:room-1")).toBe("run-1::moltnet:network:room-1");
+  it("uses a collision-safe tuple encoding", () => {
+    expect(streamKey("run-1", "moltnet", "network:room-1")).toBe('["run-1","moltnet","network:room-1"]');
+    expect(streamKey("a::b", "c", "d:e")).not.toBe(streamKey("a", "b::c", "d:e"));
+    expect(streamSlotKey("a", "b", "c:1", 2)).not.toBe(streamSlotKey("a", "b:c", "1", 2));
   });
 });
 
@@ -40,7 +42,7 @@ describe("checkSeqContiguity", () => {
 
     const result = checkSeqContiguity(events);
     expect(result.gaps).toEqual([
-      { maxSeq: 3, missing: [2], runId: "run-1", streamId: "network:room-1", system: "moltnet" }
+      { maxSeq: 3, missing: [{ from: 2, to: 2 }], runId: "run-1", streamId: "network:room-1", system: "moltnet" }
     ]);
   });
 
@@ -59,7 +61,7 @@ describe("checkSeqContiguity", () => {
     expect(result.gaps).toHaveLength(1);
     expect(result.gaps[0]).toEqual({
       maxSeq: 3,
-      missing: [2],
+      missing: [{ from: 2, to: 2 }],
       runId: "run-1",
       streamId: "network:room-2",
       system: "moltnet"
@@ -81,5 +83,12 @@ describe("checkSeqContiguity", () => {
     const result = checkSeqContiguity([]);
     expect(result.gaps).toEqual([]);
     expect(result.maxSeqByStream.size).toBe(0);
+  });
+
+  it("keeps sparse sequence gaps compact", () => {
+    const events = [1, Number.MAX_SAFE_INTEGER].map((seq) =>
+      makeEvent({ emitter: { seq, stream_id: "sparse", system: "moltnet" } })
+    );
+    expect(checkSeqContiguity(events).gaps).toEqual([{ maxSeq: Number.MAX_SAFE_INTEGER, missing: [{ from: 2, to: Number.MAX_SAFE_INTEGER - 1 }], runId: "run-1", streamId: "sparse", system: "moltnet" }]);
   });
 });

@@ -4,6 +4,7 @@ import {
   CAUSAL_EVENT_VERSION,
   canonicalJsonStringify,
   causalEventSchema,
+  PRINCIPAL_GRAMMAR_SOURCE,
   hashCausalEvent,
   parseCausalEvent,
   parseCausalJsonl,
@@ -193,5 +194,13 @@ describe("hashCausalEvent", () => {
 describe("causalEventSchema export", () => {
   it("is a usable zod schema directly", () => {
     expect(causalEventSchema.safeParse(goldenRecord).success).toBe(true);
+  });
+});
+
+describe("compatibility facade", () => {
+  it("re-exports legacy named contracts from src/envelope.ts", () => {
+    expect(typeof CAUSAL_EVENT_VERSION).toBe("string");
+    expect(PRINCIPAL_GRAMMAR_SOURCE).toBe("^(agent|operator|system):.+");
+    expect(typeof canonicalJsonStringify).toBe("function");
   });
 });
