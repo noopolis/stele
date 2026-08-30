@@ -41,3 +41,23 @@ contract.
   `parseCausalJsonl`/`causalEventSchema` on serialized text/records, never
   assumes in-process objects from another repo.
 - Keep files under 400 lines; split further before that limit.
+
+## Branches and pull requests
+
+**Never commit to `main`.** Every change lands through a pull request, without
+exception — including one-line fixes, CI configuration, documentation, and
+version bumps. Work on a branch, push it, open the PR, and let CI run.
+
+Direct commits to `main` bypass the checks that catch what local runs do not.
+A zero-byte receipt store, a package that ships without its native binary, and
+a two-week-red pipeline all reached `main` in this ecosystem while every local
+gate was green — CI found them the first time it ran over the code.
+
+- Branch names describe the change: `feat/…`, `fix/…`, `ci/…`, `docs/…`.
+- Commit messages are conventional and single-line (`feat:`, `fix:`, `docs:`,
+  `ci:`, `chore:`, `refactor:`, `test:`).
+- Never add co-author lines, sign-offs, or AI attributions.
+- Commit as you go rather than in one batch at the end, so history shows how
+  the work progressed.
+- Merge with a merge commit rather than a squash when the individual commits
+  carry meaning; squashing collapses that history irreversibly.
